@@ -189,7 +189,26 @@ class LVMSimulator(object):
             f.writelines(data)
 
 
-    def makeLensKernel(self):
+    def makeCircularLensKernel(self):
+        """
+        Generate a 2D numpy array with the characteristic function of a circle of size 'radius' (center to corner)
+        in units of pixels of the array. The image will have dimensions of imgsize x imgsize and the circle will
+        be at the integer center.
+        """
+        rlensmm=np.mean(self.telescope.ifu.lensr)
+        rlensarcsec=rlensmm*self.telescope.platescale()
+        rlenspix=rlensarcsec/self.hdr['PIXSCALE']
+        imgsize=2*rlenspix
+        antialias=5
+        imgsize=int(imgsize*antialias)
+        img = Image.new('L', (imgsize, imgsize), 0)
+        ImageDraw.Draw(img).ellipse((0,0,imgsize,imgsize), outline=1, fill=1)
+        kernel = np.array(img,dtype=float)
+        kernel /= np.sum(kernel)
+        kernel = int_rebin(kernel, (imgsize//antialias,imgsize//antialias))
+        return kernel
+
+    def makeHexLensKernel(self):
         """
         Generate a 2D numpy array with the characteristic function of a hexagon of size 'radius' (center to corner)
         in units of pixels of the array. The image will have dimensions of imgsize x imgsize and the hexagon will
@@ -229,14 +248,14 @@ class LVMSimulator(object):
                 self.psfKernel= self.makePsfKernel()
                 if self.inputType == ('fitscube'):
                     # if its fitscube kernel is convolution of psf+lenslet (1,1)
-                    self.telescope.ifu.lensKernel=self.makeLensKernel()                
+                    self.telescope.ifu.lensKernel=self.makeCircularLensKernel()                
                     self.kernel=convolve_fft(self.telescope.ifu.lensKernel, self.psfKernel)            
                 elif self.inputType == ('lenscube'):
                     # if its lenscube kernel is only the psf (1,0)
                     self.kernel=self.psfKernel 
             else:
                 # if psfModel is not defined then kernel is lenslet only (0,1)
-                self.telescope.ifu.lensKernel=self.makeLensKernel()
+                self.telescope.ifu.lensKernel=self.makeCircularLensKernel()
                 self.kernel=self.telescope.ifu.lensKernel
             self.convdata=np.zeros(np.shape(self.data))
             for i in range(np.shape(self.data)[0]):
